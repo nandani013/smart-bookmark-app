@@ -11,20 +11,24 @@ const [title, setTitle] = useState("");
 const [url, setUrl] = useState("");
 
 
-// ✅ FIX 1 — Restore session properly
+// ✅ Restore session properly
 useEffect(() => {
 
-supabase.auth.getSession().then(({ data }) => {
+const getSession = async () => {
+
+const { data } = await supabase.auth.getSession();
 
 const sessionUser = data.session?.user;
 
 setUser(sessionUser);
 
-if(sessionUser){
- fetchBookmarks(sessionUser.id);
+if (sessionUser) {
+fetchBookmarks(sessionUser.id);
 }
 
-});
+};
+
+getSession();
 
 
 const { data: listener } = supabase.auth.onAuthStateChange(
@@ -34,14 +38,14 @@ const sessionUser = session?.user;
 
 setUser(sessionUser);
 
-if(sessionUser){
- fetchBookmarks(sessionUser.id);
+if (sessionUser) {
+fetchBookmarks(sessionUser.id);
 }
 
 });
 
 return () => {
- listener.subscription.unsubscribe();
+listener.subscription.unsubscribe();
 };
 
 }, []);
@@ -52,7 +56,7 @@ return () => {
 const login = async () => {
 
 await supabase.auth.signInWithOAuth({
- provider: "google",
+provider: "google",
 });
 
 };
@@ -88,12 +92,12 @@ setBookmarks(data || []);
 // add bookmark
 const addBookmark = async () => {
 
-if(!title || !url) return;
+if (!title || !url) return;
 
 await supabase.from("bookmarks").insert({
- title,
- url,
- user_id:user.id
+title,
+url,
+user_id: user.id
 });
 
 setTitle("");
@@ -114,52 +118,30 @@ await supabase
 };
 
 
-// ✅ FINAL REALTIME FIX — instant UI update
+
+// ✅ FINAL REALTIME FIX (RELIABLE METHOD)
 useEffect(() => {
 
 if (!user) return;
 
 const channel = supabase
-.channel("realtime-bookmarks")
-
-// INSERT realtime
+.channel("bookmarks-realtime")
 .on(
 "postgres_changes",
 {
-event: "INSERT",
+event: "*",
 schema: "public",
 table: "bookmarks",
 filter: `user_id=eq.${user.id}`
 },
-(payload) => {
+() => {
 
-setBookmarks((prev) => [
-payload.new,
-...prev
-]);
+// refetch bookmarks when change happens
 
-}
-)
-
-
-// DELETE realtime
-.on(
-"postgres_changes",
-{
-event: "DELETE",
-schema: "public",
-table: "bookmarks",
-filter: `user_id=eq.${user.id}`
-},
-(payload) => {
-
-setBookmarks((prev) =>
-prev.filter((b) => b.id !== payload.old.id)
-);
+fetchBookmarks(user.id);
 
 }
 )
-
 .subscribe();
 
 return () => {
@@ -172,7 +154,7 @@ supabase.removeChannel(channel);
 
 
 // login screen
-if(!user)
+if (!user)
 return (
 
 <div className="flex justify-center items-center h-screen">
