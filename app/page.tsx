@@ -114,34 +114,59 @@ await supabase
 };
 
 
-
-
-// ✅ FIX 2 — Realtime subscription filtered by user
+// ✅ FINAL REALTIME FIX — instant UI update
 useEffect(() => {
 
-if(!user) return;
+if (!user) return;
 
 const channel = supabase
-.channel("bookmarks-channel")
+.channel("realtime-bookmarks")
+
+// INSERT realtime
 .on(
- "postgres_changes",
- {
- event:"*",
- schema:"public",
- table:"bookmarks",
- filter:`user_id=eq.${user.id}`
- },
- () => {
- fetchBookmarks(user.id);
- }
+"postgres_changes",
+{
+event: "INSERT",
+schema: "public",
+table: "bookmarks",
+filter: `user_id=eq.${user.id}`
+},
+(payload) => {
+
+setBookmarks((prev) => [
+payload.new,
+...prev
+]);
+
+}
 )
+
+
+// DELETE realtime
+.on(
+"postgres_changes",
+{
+event: "DELETE",
+schema: "public",
+table: "bookmarks",
+filter: `user_id=eq.${user.id}`
+},
+(payload) => {
+
+setBookmarks((prev) =>
+prev.filter((b) => b.id !== payload.old.id)
+);
+
+}
+)
+
 .subscribe();
 
 return () => {
- supabase.removeChannel(channel);
+supabase.removeChannel(channel);
 };
 
-},[user]);
+}, [user]);
 
 
 
