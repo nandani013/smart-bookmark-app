@@ -10,20 +10,45 @@ const [bookmarks, setBookmarks] = useState<any[]>([]);
 const [title, setTitle] = useState("");
 const [url, setUrl] = useState("");
 
+
+// ✅ FIX 1 — Restore session properly
 useEffect(() => {
 
-supabase.auth.getUser().then(({ data }) => {
- setUser(data.user);
- if(data.user) fetchBookmarks(data.user.id);
+supabase.auth.getSession().then(({ data }) => {
+
+const sessionUser = data.session?.user;
+
+setUser(sessionUser);
+
+if(sessionUser){
+ fetchBookmarks(sessionUser.id);
+}
+
 });
 
-supabase.auth.onAuthStateChange((_event, session) => {
- setUser(session?.user ?? null);
+
+const { data: listener } = supabase.auth.onAuthStateChange(
+(_event, session) => {
+
+const sessionUser = session?.user;
+
+setUser(sessionUser);
+
+if(sessionUser){
+ fetchBookmarks(sessionUser.id);
+}
+
 });
+
+return () => {
+ listener.subscription.unsubscribe();
+};
 
 }, []);
 
 
+
+// login
 const login = async () => {
 
 await supabase.auth.signInWithOAuth({
@@ -33,13 +58,19 @@ await supabase.auth.signInWithOAuth({
 };
 
 
+// logout
 const logout = async () => {
 
 await supabase.auth.signOut();
 
+setUser(null);
+setBookmarks([]);
+
 };
 
 
+
+// fetch bookmarks
 const fetchBookmarks = async (userId:any) => {
 
 const { data } = await supabase
@@ -53,6 +84,8 @@ setBookmarks(data || []);
 };
 
 
+
+// add bookmark
 const addBookmark = async () => {
 
 if(!title || !url) return;
@@ -66,11 +99,11 @@ await supabase.from("bookmarks").insert({
 setTitle("");
 setUrl("");
 
-fetchBookmarks(user.id);
-
 };
 
 
+
+// delete bookmark
 const deleteBookmark = async (id:any) => {
 
 await supabase
@@ -78,25 +111,29 @@ await supabase
 .delete()
 .eq("id", id);
 
-fetchBookmarks(user.id);
-
 };
 
 
+
+
+// ✅ FIX 2 — Realtime subscription filtered by user
 useEffect(() => {
 
 if(!user) return;
 
 const channel = supabase
-.channel("bookmarks")
+.channel("bookmarks-channel")
 .on(
  "postgres_changes",
  {
  event:"*",
  schema:"public",
  table:"bookmarks",
+ filter:`user_id=eq.${user.id}`
  },
- () => fetchBookmarks(user.id)
+ () => {
+ fetchBookmarks(user.id);
+ }
 )
 .subscribe();
 
@@ -108,6 +145,8 @@ return () => {
 
 
 
+
+// login screen
 if(!user)
 return (
 
@@ -126,6 +165,9 @@ Login with Google
 );
 
 
+
+
+// main UI
 return (
 
 <div className="p-10">
@@ -186,8 +228,6 @@ Add
 key={b.id}
 className="border p-3 mt-2 flex justify-between">
 
-<div>
-
 <a
 href={b.url}
 target="_blank"
@@ -196,9 +236,6 @@ className="text-blue-500">
 {b.title}
 
 </a>
-
-</div>
-
 
 <button
 onClick={()=>deleteBookmark(b.id)}
