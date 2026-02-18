@@ -124,33 +124,55 @@ useEffect(() => {
 
 if (!user) return;
 
+let ignore = false;
+
+// realtime subscription
 const channel = supabase
-.channel("bookmarks-realtime")
+.channel("bookmarks-realtime", {
+ config: {
+ broadcast: { self: true },
+ },
+})
+
 .on(
 "postgres_changes",
 {
 event: "*",
 schema: "public",
 table: "bookmarks",
-filter: `user_id=eq.${user.id}`
+filter: `user_id=eq.${user.id}`,
 },
 () => {
 
-// refetch bookmarks when change happens
-
-fetchBookmarks(user.id);
+if (!ignore) {
+ fetchBookmarks(user.id);
+}
 
 }
 )
+
 .subscribe();
 
+
+// 🔥 CRITICAL fallback — ensures instant sync across inactive tabs
+const interval = setInterval(() => {
+ if (!ignore) {
+  fetchBookmarks(user.id);
+ }
+}, 1000);
+
+
 return () => {
+
+ignore = true;
+
 supabase.removeChannel(channel);
+
+clearInterval(interval);
+
 };
 
 }, [user]);
-
-
 
 
 // login screen
