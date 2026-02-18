@@ -18,9 +18,7 @@
 
 /* Apply styles */
   body {
-  margin: 0;
-  padding: 0;
-  font-family: Arial, Helvetica, sans-serif;
+    @apply bg-gray-100 text-gray-900;
 }
 
 
